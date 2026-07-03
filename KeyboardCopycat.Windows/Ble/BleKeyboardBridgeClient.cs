@@ -1,5 +1,6 @@
 using KeyboardCopycat.Windows.Input;
 using Windows.Devices.Bluetooth;
+using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Devices.Enumeration;
 using Windows.Storage.Streams;
@@ -19,6 +20,30 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
 
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
+        Console.WriteLine("Scanning BLE advertisements...");
+        var advertisedAddress = await StartAdvertisementScanAsync(cancellationToken);
+        if (advertisedAddress.HasValue)
+        {
+            device = await BluetoothLEDevice.FromBluetoothAddressAsync(advertisedAddress.Value);
+        }
+
+        if (device is null)
+        {
+            Console.WriteLine("Advertisement scan did not find the bridge; checking known BLE devices...");
+            device = await OpenKnownDeviceAsync(cancellationToken);
+        }
+
+        if (device is null)
+        {
+            throw new InvalidOperationException(
+                $"BLE device '{options.DeviceName}' was not found. Make sure the Arduino firmware is powered and advertising.");
+        }
+
+        await OpenReportCharacteristicAsync(device);
+    }
+
+    private async Task<BluetoothLEDevice?> OpenKnownDeviceAsync(CancellationToken cancellationToken)
+    {
         var selector = BluetoothLEDevice.GetDeviceSelector();
         var devices = await DeviceInformation.FindAllAsync(selector);
         var match = devices.FirstOrDefault(d =>
@@ -26,18 +51,57 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
 
         if (match is null)
         {
-            throw new InvalidOperationException(
-                $"BLE device '{options.DeviceName}' was not found. Make sure the Arduino firmware is powered and advertising.");
+            return null;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        device = await BluetoothLEDevice.FromIdAsync(match.Id);
-        if (device is null)
-        {
-            throw new InvalidOperationException($"Failed to open BLE device '{options.DeviceName}'.");
-        }
+        return await BluetoothLEDevice.FromIdAsync(match.Id);
+    }
 
-        var serviceResult = await device.GetGattServicesForUuidAsync(
+    private async Task<ulong?> StartAdvertisementScanAsync(CancellationToken cancellationToken)
+    {
+        var completion = new TaskCompletionSource<ulong?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var watcher = new BluetoothLEAdvertisementWatcher
+        {
+            ScanningMode = BluetoothLEScanningMode.Active,
+        };
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            timeout.Token);
+        using var registration = linked.Token.Register(() => completion.TrySetResult(null));
+
+        watcher.Received += (_, args) =>
+        {
+            var advertisement = args.Advertisement;
+            var hasMatchingName = string.Equals(
+                advertisement.LocalName,
+                options.DeviceName,
+                StringComparison.OrdinalIgnoreCase);
+            var hasMatchingService = advertisement.ServiceUuids.Contains(options.ServiceUuid);
+
+            if (hasMatchingName || hasMatchingService)
+            {
+                completion.TrySetResult(args.BluetoothAddress);
+            }
+        };
+
+        watcher.Start();
+        try
+        {
+            return await completion.Task;
+        }
+        finally
+        {
+            watcher.Stop();
+        }
+    }
+
+    private async Task OpenReportCharacteristicAsync(BluetoothLEDevice connectedDevice)
+    {
+        var serviceResult = await connectedDevice.GetGattServicesForUuidAsync(
             options.ServiceUuid,
             BluetoothCacheMode.Uncached);
         if (serviceResult.Status != GattCommunicationStatus.Success ||
