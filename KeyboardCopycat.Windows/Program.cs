@@ -36,15 +36,10 @@ internal static class Program
         };
 
         hook.Start();
+        Console.WriteLine("Keyboard hook installed. Waiting for key events...");
 
-        try
-        {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellation.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            await bleClient.SendReportAsync(builder.ReleaseAll(), CancellationToken.None);
-        }
+        Win32MessageLoop.RunUntilCancelled(cancellation.Token);
+        await bleClient.SendReportAsync(builder.ReleaseAll(), CancellationToken.None);
 
         return 0;
     }
