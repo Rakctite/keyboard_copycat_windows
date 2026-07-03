@@ -26,6 +26,7 @@ public sealed class KeyboardReportSendQueue : IDisposable
             await foreach (var report in channel.Reader.ReadAllAsync(linked.Token))
             {
                 await client.SendReportAsync(report, linked.Token);
+                Console.WriteLine($"[ble] wrote report={ReportFormatter.FormatReport(report)}");
             }
         }, CancellationToken.None);
     }

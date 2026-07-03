@@ -30,6 +30,8 @@ internal static class Program
             var report = args.IsDown
                 ? builder.KeyDown(args.VirtualKeyCode)
                 : builder.KeyUp(args.VirtualKeyCode);
+            Console.WriteLine(
+                $"[input] {(args.IsDown ? "down" : "up")} vk=0x{args.VirtualKeyCode:X2} report={ReportFormatter.FormatReport(report)}");
             sendQueue.Enqueue(report);
         };
 
