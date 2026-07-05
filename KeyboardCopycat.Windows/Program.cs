@@ -24,12 +24,20 @@ internal static class Program
 
         using var hook = new LowLevelKeyboardHook();
         using var sendQueue = new KeyboardReportSendQueue(bleClient, cancellation.Token);
+        byte[]? lastSentReport = null;
 
         hook.KeyChanged += (_, args) =>
         {
             var report = args.IsDown
                 ? builder.KeyDown(args.VirtualKeyCode)
                 : builder.KeyUp(args.VirtualKeyCode);
+            var reportBytes = report.ToArray();
+            if (ReportsEqual(lastSentReport, reportBytes))
+            {
+                return;
+            }
+
+            lastSentReport = reportBytes;
             Console.WriteLine(
                 $"[input] {(args.IsDown ? "down" : "up")} vk=0x{args.VirtualKeyCode:X2} report={ReportFormatter.FormatReport(report)}");
             sendQueue.Enqueue(report);
@@ -42,5 +50,10 @@ internal static class Program
         await bleClient.SendReportAsync(builder.ReleaseAll(), CancellationToken.None);
 
         return 0;
+    }
+
+    private static bool ReportsEqual(byte[]? left, byte[] right)
+    {
+        return left is not null && left.SequenceEqual(right);
     }
 }
