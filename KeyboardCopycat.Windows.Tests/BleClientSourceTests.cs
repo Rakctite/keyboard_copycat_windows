@@ -21,7 +21,7 @@ public sealed class BleClientSourceTests
     }
 
     [Fact]
-    public void SendReportUsesWriteWithResponseForArduinoGattCallbackReliability()
+    public void SendReportUsesWriteWithoutResponseToAvoidBufferedAckDelay()
     {
         var source = File.ReadAllText(Path.Combine(
             AppContext.BaseDirectory,
@@ -33,7 +33,26 @@ public sealed class BleClientSourceTests
             "Ble",
             "BleKeyboardBridgeClient.cs"));
 
-        Assert.Contains("GattWriteOption.WriteWithResponse", source);
-        Assert.DoesNotContain("GattWriteOption.WriteWithoutResponse", source);
+        Assert.Contains("GattWriteOption.WriteWithoutResponse", source);
+        Assert.DoesNotContain("GattWriteOption.WriteWithResponse", source);
+    }
+
+    [Fact]
+    public void ClientKeepsGattServiceAndSessionAliveAndLogsProperties()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "KeyboardCopycat.Windows",
+            "Ble",
+            "BleKeyboardBridgeClient.cs"));
+
+        Assert.Contains("private GattDeviceService? reportService;", source);
+        Assert.Contains("private GattSession? gattSession;", source);
+        Assert.Contains("MaintainConnection = true", source);
+        Assert.Contains("CharacteristicProperties", source);
     }
 }

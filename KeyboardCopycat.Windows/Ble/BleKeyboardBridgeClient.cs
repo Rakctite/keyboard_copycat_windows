@@ -11,6 +11,8 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
 {
     private readonly BleBridgeOptions options;
     private BluetoothLEDevice? device;
+    private GattDeviceService? reportService;
+    private GattSession? gattSession;
     private GattCharacteristic? reportCharacteristic;
 
     public BleKeyboardBridgeClient(BleBridgeOptions options)
@@ -111,7 +113,11 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
                 $"BLE service {options.ServiceUuid} was not found on '{options.DeviceName}'.");
         }
 
-        var characteristicResult = await serviceResult.Services[0].GetCharacteristicsForUuidAsync(
+        reportService = serviceResult.Services[0];
+        gattSession = await GattSession.FromDeviceIdAsync(reportService.Session.DeviceId);
+        gattSession.MaintainConnection = true;
+
+        var characteristicResult = await reportService.GetCharacteristicsForUuidAsync(
             options.ReportCharacteristicUuid,
             BluetoothCacheMode.Uncached);
         if (characteristicResult.Status != GattCommunicationStatus.Success ||
@@ -122,6 +128,7 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
         }
 
         reportCharacteristic = characteristicResult.Characteristics[0];
+        Console.WriteLine($"[ble] characteristic properties={reportCharacteristic.CharacteristicProperties}");
     }
 
     public async Task SendReportAsync(HidReport report, CancellationToken cancellationToken)
@@ -137,7 +144,7 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
         writer.WriteBytes(report.ToArray());
         var status = await reportCharacteristic.WriteValueAsync(
             writer.DetachBuffer(),
-            GattWriteOption.WriteWithResponse);
+            GattWriteOption.WriteWithoutResponse);
 
         if (status != GattCommunicationStatus.Success)
         {
@@ -161,5 +168,7 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
         }
 
         device?.Dispose();
+        reportService?.Dispose();
+        gattSession?.Dispose();
     }
 }
