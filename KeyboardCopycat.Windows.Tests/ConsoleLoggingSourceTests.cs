@@ -22,7 +22,7 @@ public sealed class ConsoleLoggingSourceTests
     [Fact]
     public void ProgramLogsBleWriteStartAndCompletion()
     {
-        var source = File.ReadAllText(Path.Combine(
+        var programSource = File.ReadAllText(Path.Combine(
             AppContext.BaseDirectory,
             "..",
             "..",
@@ -30,9 +30,18 @@ public sealed class ConsoleLoggingSourceTests
             "..",
             "KeyboardCopycat.Windows",
             "Program.cs"));
+        var clientSource = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "KeyboardCopycat.Windows",
+            "Ble",
+            "BleKeyboardBridgeClient.cs"));
 
-        Assert.Contains("[ble] write start", source);
-        Assert.Contains("[ble] write done", source);
-        Assert.Contains("FormatReport", source);
+        Assert.Contains("[ble] write start", programSource);
+        Assert.Contains("[ble] write done", clientSource);
+        Assert.Contains("FormatReport", programSource);
     }
 }

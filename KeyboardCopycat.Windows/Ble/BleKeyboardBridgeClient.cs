@@ -3,6 +3,7 @@ using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Devices.Enumeration;
+using Windows.Foundation;
 using Windows.Storage.Streams;
 
 namespace KeyboardCopycat.Windows.Ble;
@@ -131,25 +132,31 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
         Console.WriteLine($"[ble] characteristic properties={reportCharacteristic.CharacteristicProperties}");
     }
 
-    public async Task SendReportAsync(HidReport report, CancellationToken cancellationToken)
+    public void SendReport(HidReport report)
     {
         if (reportCharacteristic is null)
         {
             throw new InvalidOperationException("BLE bridge is not connected.");
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-
+        var formatted = ReportFormatter.FormatReport(report);
         using var writer = new DataWriter();
         writer.WriteBytes(report.ToArray());
-        var status = await reportCharacteristic.WriteValueAsync(
+        var operation = reportCharacteristic.WriteValueAsync(
             writer.DetachBuffer(),
             GattWriteOption.WriteWithoutResponse);
-
-        if (status != GattCommunicationStatus.Success)
+        operation.Completed = (op, asyncStatus) =>
         {
-            throw new InvalidOperationException($"BLE report write failed with status {status}.");
-        }
+            if (asyncStatus == AsyncStatus.Completed)
+            {
+                var status = op.GetResults();
+                Console.WriteLine($"[ble] write done status={status} report={formatted}");
+            }
+            else
+            {
+                Console.WriteLine($"[ble] write {asyncStatus} report={formatted}");
+            }
+        };
     }
 
     public async ValueTask DisposeAsync()
@@ -159,7 +166,8 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
             var release = new HidReport(new byte[HidReport.Size]);
             try
             {
-                await SendReportAsync(release, CancellationToken.None);
+                SendReport(release);
+                await Task.Delay(100);
             }
             catch
             {
