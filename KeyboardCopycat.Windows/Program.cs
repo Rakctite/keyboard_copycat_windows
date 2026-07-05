@@ -23,7 +23,7 @@ internal static class Program
         Console.WriteLine("Connected. Forwarding keyboard input. Press Ctrl+C to stop.");
 
         using var hook = new LowLevelKeyboardHook();
-        using var sendQueue = new KeyboardReportSendQueue(bleClient, cancellation.Token);
+        using var sendLock = new SemaphoreSlim(1, 1);
         byte[]? lastSentReport = null;
 
         hook.KeyChanged += (_, args) =>
@@ -40,7 +40,7 @@ internal static class Program
             lastSentReport = reportBytes;
             Console.WriteLine(
                 $"[input] {(args.IsDown ? "down" : "up")} vk=0x{args.VirtualKeyCode:X2} report={ReportFormatter.FormatReport(report)}");
-            sendQueue.Enqueue(report);
+            _ = SendReportWithLoggingAsync(bleClient, sendLock, report);
         };
 
         hook.Start();
@@ -55,5 +55,28 @@ internal static class Program
     private static bool ReportsEqual(byte[]? left, byte[] right)
     {
         return left is not null && left.SequenceEqual(right);
+    }
+
+    private static async Task SendReportWithLoggingAsync(
+        BleKeyboardBridgeClient bleClient,
+        SemaphoreSlim sendLock,
+        HidReport report)
+    {
+        var formatted = ReportFormatter.FormatReport(report);
+        Console.WriteLine($"[ble] write start report={formatted}");
+        await sendLock.WaitAsync();
+        try
+        {
+            await bleClient.SendReportAsync(report, CancellationToken.None);
+            Console.WriteLine($"[ble] write done report={formatted}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ble] write failed report={formatted} error={ex.Message}");
+        }
+        finally
+        {
+            sendLock.Release();
+        }
     }
 }

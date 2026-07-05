@@ -20,7 +20,7 @@ public sealed class ConsoleLoggingSourceTests
     }
 
     [Fact]
-    public void SendQueueLogsSuccessfulBleWrites()
+    public void ProgramLogsBleWriteStartAndCompletion()
     {
         var source = File.ReadAllText(Path.Combine(
             AppContext.BaseDirectory,
@@ -29,10 +29,10 @@ public sealed class ConsoleLoggingSourceTests
             "..",
             "..",
             "KeyboardCopycat.Windows",
-            "Ble",
-            "KeyboardReportSendQueue.cs"));
+            "Program.cs"));
 
-        Assert.Contains("[ble] wrote report", source);
+        Assert.Contains("[ble] write start", source);
+        Assert.Contains("[ble] write done", source);
         Assert.Contains("FormatReport", source);
     }
 }
