@@ -144,7 +144,7 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
         writer.WriteBytes(report.ToArray());
         var operation = reportCharacteristic.WriteValueAsync(
             writer.DetachBuffer(),
-            GattWriteOption.WriteWithoutResponse);
+            GattWriteOption.WriteWithResponse);
         operation.Completed = (op, asyncStatus) =>
         {
             if (asyncStatus == AsyncStatus.Completed)

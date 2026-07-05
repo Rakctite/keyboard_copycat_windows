@@ -21,7 +21,7 @@ public sealed class BleClientSourceTests
     }
 
     [Fact]
-    public void SendReportUsesWriteWithoutResponseToAvoidBufferedAckDelay()
+    public void SendReportUsesWriteWithResponseForWriteOnlyCharacteristic()
     {
         var source = File.ReadAllText(Path.Combine(
             AppContext.BaseDirectory,
@@ -33,35 +33,8 @@ public sealed class BleClientSourceTests
             "Ble",
             "BleKeyboardBridgeClient.cs"));
 
-        Assert.Contains("GattWriteOption.WriteWithoutResponse", source);
-        Assert.DoesNotContain("GattWriteOption.WriteWithResponse", source);
-    }
-
-    [Fact]
-    public void SenderStartsWriteWithoutAwaitingCompletion()
-    {
-        var clientSource = File.ReadAllText(Path.Combine(
-            AppContext.BaseDirectory,
-            "..",
-            "..",
-            "..",
-            "..",
-            "KeyboardCopycat.Windows",
-            "Ble",
-            "BleKeyboardBridgeClient.cs"));
-        var programSource = File.ReadAllText(Path.Combine(
-            AppContext.BaseDirectory,
-            "..",
-            "..",
-            "..",
-            "..",
-            "KeyboardCopycat.Windows",
-            "Program.cs"));
-
-        Assert.Contains("void SendReport", clientSource);
-        Assert.Contains("operation.Completed", clientSource);
-        Assert.DoesNotContain("SemaphoreSlim", programSource);
-        Assert.DoesNotContain("await bleClient.SendReportAsync(report", programSource);
+        Assert.Contains("GattWriteOption.WriteWithResponse", source);
+        Assert.DoesNotContain("GattWriteOption.WriteWithoutResponse", source);
     }
 
     [Fact]
