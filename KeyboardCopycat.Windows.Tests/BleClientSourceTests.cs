@@ -89,9 +89,9 @@ public sealed class BleClientSourceTests
             "Ble",
             "BleKeyboardBridgeClient.cs"));
 
-        Assert.Contains("GetGattServicesWithCacheFallbackAsync", source);
-        Assert.Contains("BluetoothCacheMode.Cached", source);
-        Assert.Contains("service discovery failed after retries", source);
-        Assert.DoesNotContain("return await connectedDevice.GetGattServicesForUuidAsync(\r\n            options.ServiceUuid,\r\n            BluetoothCacheMode.Uncached);", source);
+        Assert.Contains("OpenGattServiceBySelectorAsync", source);
+        Assert.Contains("GattDeviceService.GetDeviceSelectorFromUuid", source);
+        Assert.Contains("GattDeviceService.FromIdAsync", source);
+        Assert.DoesNotContain("BluetoothCacheMode.Cached", source);
     }
 }

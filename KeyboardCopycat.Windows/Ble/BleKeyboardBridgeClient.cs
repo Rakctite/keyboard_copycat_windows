@@ -47,7 +47,15 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
                 $"BLE device '{options.DeviceName}' was not found. Make sure the Arduino firmware is powered and advertising.");
         }
 
-        await OpenReportCharacteristicAsync(device);
+        reportService = await OpenGattServiceBySelectorAsync(cancellationToken);
+        if (reportService is null)
+        {
+            await OpenReportCharacteristicAsync(device);
+        }
+        else
+        {
+            await OpenReportCharacteristicFromServiceAsync(reportService);
+        }
     }
 
     private async Task<BluetoothLEDevice?> OpenKnownDeviceAsync(CancellationToken cancellationToken)
@@ -124,10 +132,39 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
         }
 
         reportService = serviceResult.Services[0];
-        gattSession = await GattSession.FromDeviceIdAsync(reportService.Session.DeviceId);
+        await OpenReportCharacteristicFromServiceAsync(reportService);
+    }
+
+    private async Task<GattDeviceService?> OpenGattServiceBySelectorAsync(
+        CancellationToken cancellationToken)
+    {
+        var selector = GattDeviceService.GetDeviceSelectorFromUuid(options.ServiceUuid);
+        Console.WriteLine("[ble] discovering service by GATT selector");
+        var services = await DeviceInformation.FindAllAsync(selector);
+        Console.WriteLine($"[ble] GATT selector candidates={services.Count}");
+
+        foreach (var serviceInfo in services)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Console.WriteLine($"[ble] service candidate name='{serviceInfo.Name}' id='{serviceInfo.Id}'");
+            var service = await GattDeviceService.FromIdAsync(serviceInfo.Id);
+            if (service is not null)
+            {
+                Console.WriteLine("[ble] opened service by GATT selector");
+                return service;
+            }
+        }
+
+        Console.WriteLine("[ble] GATT selector did not open a service; falling back to device service discovery");
+        return null;
+    }
+
+    private async Task OpenReportCharacteristicFromServiceAsync(GattDeviceService service)
+    {
+        gattSession = await GattSession.FromDeviceIdAsync(service.Session.DeviceId);
         gattSession.MaintainConnection = true;
 
-        var characteristicResult = await GetCharacteristicsWithRetryAsync(reportService);
+        var characteristicResult = await GetCharacteristicsWithRetryAsync(service);
         if (characteristicResult.Status != GattCommunicationStatus.Success ||
             characteristicResult.Characteristics.Count == 0)
         {
@@ -140,12 +177,6 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
     }
 
     private async Task<GattDeviceServicesResult> GetGattServicesWithRetryAsync(
-        BluetoothLEDevice connectedDevice)
-    {
-        return await GetGattServicesWithCacheFallbackAsync(connectedDevice);
-    }
-
-    private async Task<GattDeviceServicesResult> GetGattServicesWithCacheFallbackAsync(
         BluetoothLEDevice connectedDevice)
     {
         const int maxAttempts = 5;
@@ -167,14 +198,11 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
                     await Task.Delay(500);
                     continue;
                 }
-
-                Console.WriteLine("[ble] service discovery failed after retries; trying cached discovery");
+                throw;
             }
         }
 
-        return await connectedDevice.GetGattServicesForUuidAsync(
-            options.ServiceUuid,
-            BluetoothCacheMode.Cached);
+        throw new InvalidOperationException("BLE service discovery retry loop exited unexpectedly.");
     }
 
     private async Task<GattCharacteristicsResult> GetCharacteristicsWithRetryAsync(
@@ -199,14 +227,11 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
                     await Task.Delay(500);
                     continue;
                 }
-
-                Console.WriteLine("[ble] characteristic discovery failed after retries; trying cached discovery");
+                throw;
             }
         }
 
-        return await service.GetCharacteristicsForUuidAsync(
-            options.ReportCharacteristicUuid,
-            BluetoothCacheMode.Cached);
+        throw new InvalidOperationException("BLE characteristic discovery retry loop exited unexpectedly.");
     }
 
     public void SendReport(HidReport report)
