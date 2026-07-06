@@ -20,7 +20,7 @@ public sealed class ConsoleLoggingSourceTests
     }
 
     [Fact]
-    public void ProgramLogsBleWriteStartAndCompletion()
+    public void ServerLogsBleNotifications()
     {
         var programSource = File.ReadAllText(Path.Combine(
             AppContext.BaseDirectory,
@@ -30,7 +30,7 @@ public sealed class ConsoleLoggingSourceTests
             "..",
             "KeyboardCopycat.Windows",
             "Program.cs"));
-        var clientSource = File.ReadAllText(Path.Combine(
+        var serverSource = File.ReadAllText(Path.Combine(
             AppContext.BaseDirectory,
             "..",
             "..",
@@ -38,10 +38,10 @@ public sealed class ConsoleLoggingSourceTests
             "..",
             "KeyboardCopycat.Windows",
             "Ble",
-            "BleKeyboardBridgeClient.cs"));
+            "BleKeyboardReportServer.cs"));
 
-        Assert.Contains("[ble] write start", programSource);
-        Assert.Contains("[ble] write done", clientSource);
+        Assert.Contains("PublishReportAsync", programSource);
+        Assert.Contains("[ble] notify status=", serverSource);
         Assert.Contains("FormatReport", programSource);
     }
 }

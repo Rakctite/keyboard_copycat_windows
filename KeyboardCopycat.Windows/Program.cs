@@ -16,11 +16,11 @@ internal static class Program
         };
 
         var builder = new HidReportBuilder();
-        await using var bleClient = new BleKeyboardBridgeClient(BleBridgeOptions.Defaults);
+        await using var bleServer = new BleKeyboardReportServer(BleBridgeOptions.Defaults);
 
-        Console.WriteLine("Searching for KeyboardBridge...");
-        await bleClient.ConnectAsync(cancellation.Token);
-        Console.WriteLine("Connected. Forwarding keyboard input. Press Ctrl+C to stop.");
+        Console.WriteLine("Starting KeyboardBridge GATT server...");
+        await bleServer.StartAsync();
+        Console.WriteLine("Advertising. Forwarding keyboard input to subscribed Arduino clients. Press Ctrl+C to stop.");
 
         using var hook = new LowLevelKeyboardHook();
         byte[]? lastSentReport = null;
@@ -39,16 +39,14 @@ internal static class Program
             lastSentReport = reportBytes;
             Console.WriteLine(
                 $"[input] {(args.IsDown ? "down" : "up")} vk=0x{args.VirtualKeyCode:X2} report={ReportFormatter.FormatReport(report)}");
-            Console.WriteLine($"[ble] write start report={ReportFormatter.FormatReport(report)}");
-            bleClient.SendReport(report);
+            _ = bleServer.PublishReportAsync(report);
         };
 
         hook.Start();
         Console.WriteLine("Keyboard hook installed. Waiting for key events...");
 
         Win32MessageLoop.RunUntilCancelled(cancellation.Token);
-        bleClient.SendReport(builder.ReleaseAll());
-        await Task.Delay(100);
+        await bleServer.PublishReportAsync(builder.ReleaseAll());
 
         return 0;
     }
