@@ -55,4 +55,23 @@ public sealed class BleClientSourceTests
         Assert.Contains("MaintainConnection = true", source);
         Assert.Contains("CharacteristicProperties", source);
     }
+
+    [Fact]
+    public void ClientRetriesGattDiscoveryAndLogsComExceptionHResult()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "KeyboardCopycat.Windows",
+            "Ble",
+            "BleKeyboardBridgeClient.cs"));
+
+        Assert.Contains("COMException", source);
+        Assert.Contains("HResult", source);
+        Assert.Contains("GetGattServicesWithRetryAsync", source);
+        Assert.Contains("Task.Delay", source);
+    }
 }

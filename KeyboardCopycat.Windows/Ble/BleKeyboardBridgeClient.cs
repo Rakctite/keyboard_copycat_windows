@@ -1,4 +1,5 @@
 using KeyboardCopycat.Windows.Input;
+using System.Runtime.InteropServices;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
@@ -104,9 +105,7 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
 
     private async Task OpenReportCharacteristicAsync(BluetoothLEDevice connectedDevice)
     {
-        var serviceResult = await connectedDevice.GetGattServicesForUuidAsync(
-            options.ServiceUuid,
-            BluetoothCacheMode.Uncached);
+        var serviceResult = await GetGattServicesWithRetryAsync(connectedDevice);
         if (serviceResult.Status != GattCommunicationStatus.Success ||
             serviceResult.Services.Count == 0)
         {
@@ -118,9 +117,7 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
         gattSession = await GattSession.FromDeviceIdAsync(reportService.Session.DeviceId);
         gattSession.MaintainConnection = true;
 
-        var characteristicResult = await reportService.GetCharacteristicsForUuidAsync(
-            options.ReportCharacteristicUuid,
-            BluetoothCacheMode.Uncached);
+        var characteristicResult = await GetCharacteristicsWithRetryAsync(reportService);
         if (characteristicResult.Status != GattCommunicationStatus.Success ||
             characteristicResult.Characteristics.Count == 0)
         {
@@ -130,6 +127,58 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
 
         reportCharacteristic = characteristicResult.Characteristics[0];
         Console.WriteLine($"[ble] characteristic properties={reportCharacteristic.CharacteristicProperties}");
+    }
+
+    private async Task<GattDeviceServicesResult> GetGattServicesWithRetryAsync(
+        BluetoothLEDevice connectedDevice)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                Console.WriteLine($"[ble] discovering service attempt={attempt}");
+                return await connectedDevice.GetGattServicesForUuidAsync(
+                    options.ServiceUuid,
+                    BluetoothCacheMode.Uncached);
+            }
+            catch (COMException ex) when (attempt < maxAttempts)
+            {
+                Console.WriteLine(
+                    $"[ble] service discovery COMException attempt={attempt} HResult=0x{ex.HResult:X8} message={ex.Message}");
+                await Task.Delay(500);
+            }
+        }
+
+        return await connectedDevice.GetGattServicesForUuidAsync(
+            options.ServiceUuid,
+            BluetoothCacheMode.Uncached);
+    }
+
+    private async Task<GattCharacteristicsResult> GetCharacteristicsWithRetryAsync(
+        GattDeviceService service)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                Console.WriteLine($"[ble] discovering characteristic attempt={attempt}");
+                return await service.GetCharacteristicsForUuidAsync(
+                    options.ReportCharacteristicUuid,
+                    BluetoothCacheMode.Uncached);
+            }
+            catch (COMException ex) when (attempt < maxAttempts)
+            {
+                Console.WriteLine(
+                    $"[ble] characteristic discovery COMException attempt={attempt} HResult=0x{ex.HResult:X8} message={ex.Message}");
+                await Task.Delay(500);
+            }
+        }
+
+        return await service.GetCharacteristicsForUuidAsync(
+            options.ReportCharacteristicUuid,
+            BluetoothCacheMode.Uncached);
     }
 
     public void SendReport(HidReport report)
