@@ -8,6 +8,7 @@ namespace KeyboardCopycat.Windows.Ble;
 public sealed class BleKeyboardReportServer : IAsyncDisposable
 {
     private readonly BleBridgeOptions options;
+    private readonly SemaphoreSlim notifyLock = new(1, 1);
     private GattServiceProvider? provider;
     private GattLocalCharacteristic? reportCharacteristic;
 
@@ -61,10 +62,18 @@ public sealed class BleKeyboardReportServer : IAsyncDisposable
             throw new InvalidOperationException("BLE report server is not started.");
         }
 
-        using var writer = new DataWriter();
-        writer.WriteBytes(report.ToArray());
-        var status = await reportCharacteristic.NotifyValueAsync(writer.DetachBuffer());
-        Console.WriteLine($"[ble] notify status={status} report={ReportFormatter.FormatReport(report)}");
+        await notifyLock.WaitAsync();
+        try
+        {
+            using var writer = new DataWriter();
+            writer.WriteBytes(report.ToArray());
+            var status = await reportCharacteristic.NotifyValueAsync(writer.DetachBuffer());
+            Console.WriteLine($"[ble] notify status={status} report={ReportFormatter.FormatReport(report)}");
+        }
+        finally
+        {
+            notifyLock.Release();
+        }
     }
 
     private static async void OnReadRequested(
@@ -93,6 +102,7 @@ public sealed class BleKeyboardReportServer : IAsyncDisposable
     public ValueTask DisposeAsync()
     {
         provider?.StopAdvertising();
+        notifyLock.Dispose();
         return ValueTask.CompletedTask;
     }
 }
