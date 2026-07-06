@@ -74,4 +74,23 @@ public sealed class BleClientSourceTests
         Assert.Contains("GetGattServicesWithRetryAsync", source);
         Assert.Contains("Task.Delay", source);
     }
+
+    [Fact]
+    public void ClientHandlesFinalGattDiscoveryFailureAndFallsBackToCachedDiscovery()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "KeyboardCopycat.Windows",
+            "Ble",
+            "BleKeyboardBridgeClient.cs"));
+
+        Assert.Contains("GetGattServicesWithCacheFallbackAsync", source);
+        Assert.Contains("BluetoothCacheMode.Cached", source);
+        Assert.Contains("service discovery failed after retries", source);
+        Assert.DoesNotContain("return await connectedDevice.GetGattServicesForUuidAsync(\r\n            options.ServiceUuid,\r\n            BluetoothCacheMode.Uncached);", source);
+    }
 }

@@ -132,6 +132,12 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
     private async Task<GattDeviceServicesResult> GetGattServicesWithRetryAsync(
         BluetoothLEDevice connectedDevice)
     {
+        return await GetGattServicesWithCacheFallbackAsync(connectedDevice);
+    }
+
+    private async Task<GattDeviceServicesResult> GetGattServicesWithCacheFallbackAsync(
+        BluetoothLEDevice connectedDevice)
+    {
         const int maxAttempts = 5;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
@@ -142,17 +148,23 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
                     options.ServiceUuid,
                     BluetoothCacheMode.Uncached);
             }
-            catch (COMException ex) when (attempt < maxAttempts)
+            catch (COMException ex)
             {
                 Console.WriteLine(
                     $"[ble] service discovery COMException attempt={attempt} HResult=0x{ex.HResult:X8} message={ex.Message}");
-                await Task.Delay(500);
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(500);
+                    continue;
+                }
+
+                Console.WriteLine("[ble] service discovery failed after retries; trying cached discovery");
             }
         }
 
         return await connectedDevice.GetGattServicesForUuidAsync(
             options.ServiceUuid,
-            BluetoothCacheMode.Uncached);
+            BluetoothCacheMode.Cached);
     }
 
     private async Task<GattCharacteristicsResult> GetCharacteristicsWithRetryAsync(
@@ -168,17 +180,23 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
                     options.ReportCharacteristicUuid,
                     BluetoothCacheMode.Uncached);
             }
-            catch (COMException ex) when (attempt < maxAttempts)
+            catch (COMException ex)
             {
                 Console.WriteLine(
                     $"[ble] characteristic discovery COMException attempt={attempt} HResult=0x{ex.HResult:X8} message={ex.Message}");
-                await Task.Delay(500);
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(500);
+                    continue;
+                }
+
+                Console.WriteLine("[ble] characteristic discovery failed after retries; trying cached discovery");
             }
         }
 
         return await service.GetCharacteristicsForUuidAsync(
             options.ReportCharacteristicUuid,
-            BluetoothCacheMode.Uncached);
+            BluetoothCacheMode.Cached);
     }
 
     public void SendReport(HidReport report)
