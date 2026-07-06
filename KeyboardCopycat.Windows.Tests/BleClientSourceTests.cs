@@ -17,6 +17,7 @@ public sealed class BleClientSourceTests
 
         Assert.Contains("BluetoothLEAdvertisementWatcher", source);
         Assert.Contains("BluetoothLEDevice.FromBluetoothAddressAsync", source);
+        Assert.Contains("BluetoothAddressType", source);
         Assert.Contains("StartAdvertisementScanAsync", source);
     }
 

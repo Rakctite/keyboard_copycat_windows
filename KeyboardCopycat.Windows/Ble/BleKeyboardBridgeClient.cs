@@ -25,10 +25,14 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
         Console.WriteLine("Scanning BLE advertisements...");
-        var advertisedAddress = await StartAdvertisementScanAsync(cancellationToken);
-        if (advertisedAddress.HasValue)
+        var advertisedDevice = await StartAdvertisementScanAsync(cancellationToken);
+        if (advertisedDevice is not null)
         {
-            device = await BluetoothLEDevice.FromBluetoothAddressAsync(advertisedAddress.Value);
+            Console.WriteLine(
+                $"[ble] opening advertised device address=0x{advertisedDevice.Value.Address:X12} type={advertisedDevice.Value.AddressType}");
+            device = await BluetoothLEDevice.FromBluetoothAddressAsync(
+                advertisedDevice.Value.Address,
+                advertisedDevice.Value.AddressType);
         }
 
         if (device is null)
@@ -62,9 +66,9 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
         return await BluetoothLEDevice.FromIdAsync(match.Id);
     }
 
-    private async Task<ulong?> StartAdvertisementScanAsync(CancellationToken cancellationToken)
+    private async Task<AdvertisedBleDevice?> StartAdvertisementScanAsync(CancellationToken cancellationToken)
     {
-        var completion = new TaskCompletionSource<ulong?>(
+        var completion = new TaskCompletionSource<AdvertisedBleDevice?>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var watcher = new BluetoothLEAdvertisementWatcher
         {
@@ -88,7 +92,9 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
 
             if (hasMatchingName || hasMatchingService)
             {
-                completion.TrySetResult(args.BluetoothAddress);
+                completion.TrySetResult(new AdvertisedBleDevice(
+                    args.BluetoothAddress,
+                    args.BluetoothAddressType));
             }
         };
 
@@ -102,6 +108,10 @@ public sealed class BleKeyboardBridgeClient : IAsyncDisposable
             watcher.Stop();
         }
     }
+
+    private readonly record struct AdvertisedBleDevice(
+        ulong Address,
+        BluetoothAddressType AddressType);
 
     private async Task OpenReportCharacteristicAsync(BluetoothLEDevice connectedDevice)
     {
