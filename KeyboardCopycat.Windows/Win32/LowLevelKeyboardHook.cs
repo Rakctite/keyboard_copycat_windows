@@ -22,6 +22,8 @@ public sealed class LowLevelKeyboardHook : IDisposable
 
     public event EventHandler<KeyboardHookEventArgs>? KeyChanged;
 
+    public bool SuppressKeyboardInput { get; set; }
+
     public void Start()
     {
         if (hookId != 0)
@@ -60,14 +62,22 @@ public sealed class LowLevelKeyboardHook : IDisposable
             var injected = (info.Flags & LLKHF_INJECTED) != 0;
             if (!injected)
             {
+                var handled = false;
                 var message = wParam.ToInt32();
                 if (message is WM_KEYDOWN or WM_SYSKEYDOWN)
                 {
                     KeyChanged?.Invoke(this, new KeyboardHookEventArgs(info.VirtualKeyCode, true));
+                    handled = true;
                 }
                 else if (message is WM_KEYUP or WM_SYSKEYUP)
                 {
                     KeyChanged?.Invoke(this, new KeyboardHookEventArgs(info.VirtualKeyCode, false));
+                    handled = true;
+                }
+
+                if (handled && SuppressKeyboardInput)
+                {
+                    return 1;
                 }
             }
         }

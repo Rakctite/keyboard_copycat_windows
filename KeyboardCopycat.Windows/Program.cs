@@ -1,5 +1,6 @@
 using KeyboardCopycat.Windows.Ble;
 using KeyboardCopycat.Windows.Input;
+using KeyboardCopycat.Windows.Ui;
 using KeyboardCopycat.Windows.Win32;
 
 namespace KeyboardCopycat.Windows;
@@ -8,21 +9,46 @@ internal static class Program
 {
     private static readonly TimeSpan HeldKeyHeartbeatInterval = TimeSpan.FromMilliseconds(1000);
 
-    private static async Task<int> Main()
+    [STAThread]
+    private static void Main()
     {
-        using var cancellation = new CancellationTokenSource();
-        Console.CancelKeyPress += (_, args) =>
-        {
-            args.Cancel = true;
-            cancellation.Cancel();
-        };
+        ApplicationConfiguration.Initialize();
 
+        using var cancellation = new CancellationTokenSource();
+        var form = new MainForm();
+        using var logWriter = new UiLogTextWriter(form.AppendLog);
+        Console.SetOut(logWriter);
+        Console.SetError(logWriter);
+
+        Task? runtimeTask = null;
+        form.Shown += (_, _) =>
+        {
+            runtimeTask = RunBridgeAsync(form, cancellation.Token);
+        };
+        form.FormClosing += (_, _) => cancellation.Cancel();
+
+        Application.Run(form);
+
+        try
+        {
+            runtimeTask?.GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private static async Task RunBridgeAsync(MainForm form, CancellationToken cancellationToken)
+    {
         var builder = new HidReportBuilder();
         await using var bleServer = new BleKeyboardReportServer(BleBridgeOptions.Defaults);
 
+        bleServer.ArduinoConnectionChanged += (_, connected) => form.SetArduinoConnected(connected);
+
         Console.WriteLine("Starting KeyboardBridge GATT server...");
         await bleServer.StartAsync();
-        Console.WriteLine("Advertising. Forwarding keyboard input to subscribed Arduino clients. Press Ctrl+C to stop.");
+        form.SetArduinoConnected(bleServer.IsArduinoConnected);
+        Console.WriteLine("Advertising. Forwarding keyboard input to subscribed Arduino clients.");
 
         using var hook = new LowLevelKeyboardHook();
         object reportLock = new();
@@ -38,7 +64,20 @@ internal static class Program
                     return latestHeldReport;
                 }
             },
-            cancellation.Token);
+            cancellationToken);
+
+        form.LockInputRequested += (_, _) =>
+        {
+            hook.SuppressKeyboardInput = true;
+            form.SetInputLocked(true);
+            Console.WriteLine("[input] local Windows keyboard locked");
+        };
+        form.UnlockInputRequested += (_, _) =>
+        {
+            hook.SuppressKeyboardInput = false;
+            form.SetInputLocked(false);
+            Console.WriteLine("[input] local Windows keyboard allowed");
+        };
 
         hook.KeyChanged += (_, args) =>
         {
@@ -65,11 +104,16 @@ internal static class Program
         hook.Start();
         Console.WriteLine("Keyboard hook installed. Waiting for key events...");
 
-        Win32MessageLoop.RunUntilCancelled(cancellation.Token);
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+
         await bleServer.PublishReportAsync(builder.ReleaseAll());
         await heartbeatTask;
-
-        return 0;
     }
 
     private static async Task RunHeldKeyHeartbeatAsync(

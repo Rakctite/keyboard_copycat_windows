@@ -11,11 +11,16 @@ public sealed class BleKeyboardReportServer : IAsyncDisposable
     private readonly SemaphoreSlim notifyLock = new(1, 1);
     private GattServiceProvider? provider;
     private GattLocalCharacteristic? reportCharacteristic;
+    private bool arduinoConnected;
 
     public BleKeyboardReportServer(BleBridgeOptions options)
     {
         this.options = options;
     }
+
+    public event EventHandler<bool>? ArduinoConnectionChanged;
+
+    public bool IsArduinoConnected => arduinoConnected;
 
     public async Task StartAsync()
     {
@@ -44,6 +49,7 @@ public sealed class BleKeyboardReportServer : IAsyncDisposable
 
         reportCharacteristic = characteristicResult.Characteristic;
         reportCharacteristic.ReadRequested += OnReadRequested;
+        reportCharacteristic.SubscribedClientsChanged += (_, _) => UpdateArduinoConnectionState();
 
         provider.StartAdvertising(new GattServiceProviderAdvertisingParameters
         {
@@ -53,6 +59,7 @@ public sealed class BleKeyboardReportServer : IAsyncDisposable
 
         Console.WriteLine($"[ble] advertising service={options.ServiceUuid}");
         Console.WriteLine($"[ble] report characteristic={options.ReportCharacteristicUuid}");
+        UpdateArduinoConnectionState();
     }
 
     public async Task PublishReportAsync(HidReport report)
@@ -74,6 +81,19 @@ public sealed class BleKeyboardReportServer : IAsyncDisposable
         {
             notifyLock.Release();
         }
+    }
+
+    private void UpdateArduinoConnectionState()
+    {
+        var connected = reportCharacteristic?.SubscribedClients.Count > 0;
+        if (connected == arduinoConnected)
+        {
+            return;
+        }
+
+        arduinoConnected = connected;
+        Console.WriteLine($"[ble] arduino subscribed={arduinoConnected}");
+        ArduinoConnectionChanged?.Invoke(this, arduinoConnected);
     }
 
     private static async void OnReadRequested(

@@ -3,7 +3,7 @@ namespace KeyboardCopycat.Windows.Tests;
 public sealed class KeyboardMessageLoopSourceTests
 {
     [Fact]
-    public void ProgramRunsWin32MessageLoopAfterInstallingKeyboardHook()
+    public void ProgramRunsWindowsFormsMessageLoopAndStartsKeyboardHookRuntime()
     {
         var source = File.ReadAllText(Path.Combine(
             AppContext.BaseDirectory,
@@ -14,8 +14,9 @@ public sealed class KeyboardMessageLoopSourceTests
             "KeyboardCopycat.Windows",
             "Program.cs"));
 
-        Assert.Contains("Win32MessageLoop.RunUntilCancelled", source);
-        Assert.DoesNotContain("Task.Delay(Timeout.InfiniteTimeSpan", source);
+        Assert.Contains("Application.Run(form)", source);
+        Assert.Contains("RunBridgeAsync", source);
+        Assert.Contains("hook.Start()", source);
     }
 
     [Fact]
