@@ -40,6 +40,9 @@ public static class VirtualKeyCodes
     public const int Eight = 0x38;
     public const int Nine = 0x39;
 
+    public const int Multiply = 0x6A;
+    public const int Subtract = 0x6D;
+
     public const int F1 = 0x70;
     public const int F2 = 0x71;
     public const int F3 = 0x72;

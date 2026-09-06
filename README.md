@@ -1,6 +1,6 @@
 # Keyboard Copycat Windows Sender
 
-Windows console sender for the Keyboard Copycat Arduino firmware.
+Windows sender and control panel for the Keyboard Copycat Arduino firmware.
 
 The app captures local keyboard events with a low-level keyboard hook, converts the current pressed-key state into an 8-byte USB HID keyboard report, and writes that report to the Arduino Nano ESP32 over BLE GATT.
 
@@ -63,7 +63,19 @@ Flash and power the Arduino firmware first, then run:
 dotnet run --project KeyboardCopycat.Windows
 ```
 
-Press `Ctrl+C` to stop. The app sends a release-all report during shutdown.
+Close the control panel to stop. The app sends a release-all report during shutdown.
+
+## Input routing modes
+
+The app starts in **Host allowed / Arduino blocked** mode. Press `-` and `*`
+together to switch between these two exclusive modes:
+
+- **Host allowed / Arduino blocked**: keys work on Windows and are not sent to Arduino.
+- **Host blocked / Arduino allowed**: local Windows input is suppressed and keys are sent to Arduino.
+
+The shortcut supports both numpad `-` + `*` and the main keyboard `-` + `Shift+8`.
+Holding the shortcut does not repeatedly switch modes. The control panel buttons can
+also select either mode directly.
 
 ## Notes
 

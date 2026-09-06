@@ -24,13 +24,29 @@ public sealed class BleKeyboardReportServer : IAsyncDisposable
 
     public async Task StartAsync()
     {
+        var adapter = await BluetoothAdapter.GetDefaultAsync();
+        if (adapter is null)
+        {
+            DiagnosticsLog.Write("[adapter] no default Bluetooth adapter");
+            throw new InvalidOperationException("No default Bluetooth adapter is available.");
+        }
+
+        DiagnosticsLog.Write(
+            $"[adapter] id={adapter.DeviceId} " +
+            $"lowEnergy={adapter.IsLowEnergySupported} " +
+            $"peripheralRole={adapter.IsPeripheralRoleSupported} " +
+            $"extendedAdvertising={adapter.IsExtendedAdvertisingSupported}");
+
         var result = await GattServiceProvider.CreateAsync(options.ServiceUuid);
+        DiagnosticsLog.Write($"[gatt] create result={result.Error}");
         if (result.Error != BluetoothError.Success)
         {
             throw new InvalidOperationException($"Failed to create GATT service provider: {result.Error}");
         }
 
         provider = result.ServiceProvider;
+        provider.AdvertisementStatusChanged += (_, args) =>
+            DiagnosticsLog.Write($"[advertising] status={args.Status} error={args.Error}");
 
         var parameters = new GattLocalCharacteristicParameters
         {
@@ -56,6 +72,9 @@ public sealed class BleKeyboardReportServer : IAsyncDisposable
             IsConnectable = true,
             IsDiscoverable = true,
         });
+
+        DiagnosticsLog.Write(
+            $"[advertising] requested currentStatus={provider.AdvertisementStatus}");
 
         Console.WriteLine($"[ble] advertising service={options.ServiceUuid}");
         Console.WriteLine($"[ble] report characteristic={options.ReportCharacteristicUuid}");
@@ -92,6 +111,7 @@ public sealed class BleKeyboardReportServer : IAsyncDisposable
         }
 
         arduinoConnected = connected;
+        DiagnosticsLog.Write($"[connection] arduinoSubscribed={arduinoConnected}");
         Console.WriteLine($"[ble] arduino subscribed={arduinoConnected}");
         ArduinoConnectionChanged?.Invoke(this, arduinoConnected);
     }

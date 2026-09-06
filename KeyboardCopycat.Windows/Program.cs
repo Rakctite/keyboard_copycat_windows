@@ -13,6 +13,7 @@ internal static class Program
     private static void Main()
     {
         ApplicationConfiguration.Initialize();
+        DiagnosticsLog.Start();
 
         using var cancellation = new CancellationTokenSource();
         var form = new MainForm();
@@ -24,6 +25,9 @@ internal static class Program
         form.Shown += (_, _) =>
         {
             runtimeTask = RunBridgeAsync(form, cancellation.Token);
+            _ = runtimeTask.ContinueWith(
+                task => DiagnosticsLog.Write($"[fatal] {task.Exception?.GetBaseException()}"),
+                TaskContinuationOptions.OnlyOnFaulted);
         };
         form.FormClosing += (_, _) => cancellation.Cancel();
 
@@ -51,6 +55,7 @@ internal static class Program
         Console.WriteLine("Advertising. Forwarding keyboard input to subscribed Arduino clients.");
 
         using var hook = new LowLevelKeyboardHook();
+        var routing = new InputRoutingController();
         object reportLock = new();
         byte[]? lastSentReport = null;
         HidReport? latestHeldReport = null;
@@ -68,19 +73,33 @@ internal static class Program
 
         form.LockInputRequested += (_, _) =>
         {
-            hook.SuppressKeyboardInput = true;
-            form.SetInputLocked(true);
-            Console.WriteLine("[input] local Windows keyboard locked");
+            if (routing.SetMode(InputRoutingMode.ArduinoOnly))
+            {
+                ApplyRoutingMode(InputRoutingMode.ArduinoOnly);
+            }
         };
         form.UnlockInputRequested += (_, _) =>
         {
-            hook.SuppressKeyboardInput = false;
-            form.SetInputLocked(false);
-            Console.WriteLine("[input] local Windows keyboard allowed");
+            if (routing.SetMode(InputRoutingMode.HostOnly))
+            {
+                ApplyRoutingMode(InputRoutingMode.HostOnly);
+            }
         };
 
         hook.KeyChanged += (_, args) =>
         {
+            var changedMode = routing.HandleKey(args.VirtualKeyCode, args.IsDown);
+            if (changedMode.HasValue)
+            {
+                ApplyRoutingMode(changedMode.Value);
+                return;
+            }
+
+            if (routing.Mode == InputRoutingMode.HostOnly)
+            {
+                return;
+            }
+
             var report = args.IsDown
                 ? builder.KeyDown(args.VirtualKeyCode)
                 : builder.KeyUp(args.VirtualKeyCode);
@@ -100,6 +119,28 @@ internal static class Program
                 $"[input] {(args.IsDown ? "down" : "up")} vk=0x{args.VirtualKeyCode:X2} report={ReportFormatter.FormatReport(report)}");
             _ = bleServer.PublishReportAsync(report);
         };
+
+        void ApplyRoutingMode(InputRoutingMode mode)
+        {
+            hook.SuppressKeyboardInput = mode == InputRoutingMode.ArduinoOnly;
+            form.SetRoutingMode(mode);
+
+            var releaseReport = builder.ReleaseAll();
+            lastSentReport = releaseReport.ToArray();
+            lock (reportLock)
+            {
+                latestHeldReport = null;
+            }
+
+            if (mode == InputRoutingMode.HostOnly)
+            {
+                _ = bleServer.PublishReportAsync(releaseReport);
+            }
+
+            Console.WriteLine(mode == InputRoutingMode.ArduinoOnly
+                ? "[mode] host blocked / Arduino allowed"
+                : "[mode] host allowed / Arduino blocked");
+        }
 
         hook.Start();
         Console.WriteLine("Keyboard hook installed. Waiting for key events...");

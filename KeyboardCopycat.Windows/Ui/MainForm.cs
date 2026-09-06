@@ -1,3 +1,5 @@
+using KeyboardCopycat.Windows.Input;
+
 namespace KeyboardCopycat.Windows.Ui;
 
 public sealed class MainForm : Form
@@ -25,20 +27,20 @@ public sealed class MainForm : Form
         inputModeLabel = new Label
         {
             AutoSize = true,
-            Text = "Windows 입력: 허용",
+            Text = "모드: 호스트 허용 / Arduino 금지",
         };
 
         var lockButton = new Button
         {
             AutoSize = true,
-            Text = "키보드 입력 잠금",
+            Text = "Arduino 입력 모드",
         };
         lockButton.Click += (_, _) => LockInputRequested?.Invoke(this, EventArgs.Empty);
 
         var unlockButton = new Button
         {
             AutoSize = true,
-            Text = "키보드 입력 허용",
+            Text = "호스트 입력 모드",
         };
         unlockButton.Click += (_, _) => UnlockInputRequested?.Invoke(this, EventArgs.Empty);
 
@@ -125,14 +127,16 @@ public sealed class MainForm : Form
         statusLabel.Text = connected ? "Arduino: 연결됨" : "Arduino: 대기중";
     }
 
-    public void SetInputLocked(bool locked)
+    public void SetRoutingMode(InputRoutingMode mode)
     {
         if (InvokeRequired)
         {
-            BeginInvoke(() => SetInputLocked(locked));
+            BeginInvoke(() => SetRoutingMode(mode));
             return;
         }
 
-        inputModeLabel.Text = locked ? "Windows 입력: 잠금" : "Windows 입력: 허용";
+        inputModeLabel.Text = mode == InputRoutingMode.ArduinoOnly
+            ? "모드: 호스트 금지 / Arduino 허용"
+            : "모드: 호스트 허용 / Arduino 금지";
     }
 }

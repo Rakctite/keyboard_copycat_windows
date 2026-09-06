@@ -56,6 +56,8 @@ public static class VirtualKeyMapper
         [VirtualKeyCodes.Comma] = 0x36,
         [VirtualKeyCodes.Period] = 0x37,
         [VirtualKeyCodes.Slash] = 0x38,
+        [VirtualKeyCodes.Multiply] = 0x55,
+        [VirtualKeyCodes.Subtract] = 0x56,
         [VirtualKeyCodes.F1] = 0x3A,
         [VirtualKeyCodes.F2] = 0x3B,
         [VirtualKeyCodes.F3] = 0x3C,
